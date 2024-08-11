@@ -1,61 +1,101 @@
 package main
 
 import (
-	// Uncomment this line to pass the first stage
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
-	"unicode"
-	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
 
-// Example:
-// - 5:hello -> hello
-// - 10:hello12345 -> hello12345
-func decodeBencode(bencodedString string) (interface{}, error) {
-	if unicode.IsDigit(rune(bencodedString[0])) {
-		var firstColonIndex int
+func decodeBencode(bencodedString string, index *int) (interface{}, error) {
 
-		for i := 0; i < len(bencodedString); i++ {
-			if bencodedString[i] == ':' {
-				firstColonIndex = i
-				break
-			}
-		}
-
-		lengthStr := bencodedString[:firstColonIndex]
-
-		length, err := strconv.Atoi(lengthStr)
-		if err != nil {
-			return "", err
-		}
-
-		return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], nil
-	} else if bencodedString[0] == 'i' {
-		bencodedValue := bencodedString[1 : len(bencodedString)-1]
-		number, err := strconv.Atoi(bencodedValue)
-		if err != nil {
-			return "", err
-		}
-		return number, nil
-	} else {
-		return "", fmt.Errorf("Only strings are supported at the moment")
+	switch bencodedString[*index] {
+	case 'i':
+		return decodeInt(bencodedString, index)
+	case 'l':
+		return decodeList(bencodedString, index)
+	default:
+		return decodeString(bencodedString, index)
 	}
+
+}
+
+func decodeList(bencodedString string, index *int) (interface{}, error) {
+	*index++
+
+	list := make([]interface{}, 0)
+
+	for bencodedString[*index] != 'e' {
+		value, err := decodeBencode(bencodedString, index)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, value)
+	}
+
+	if bencodedString[*index] != 'e' {
+		return nil, fmt.Errorf("current list in not properly closed")
+	}
+
+	*index++
+
+	return list, nil
+}
+
+func decodeString(bencodedString string, index *int) (interface{}, error) {
+
+	var current_index int = *index
+	for bencodedString[current_index] != ':' {
+		current_index++
+
+	}
+
+	lengthStr := bencodedString[*index:current_index]
+
+	length, err := strconv.Atoi(lengthStr)
+	if err != nil {
+		return "", err
+	}
+
+	start_index := current_index + 1
+	end_index := start_index + length
+
+	value := bencodedString[start_index:end_index]
+	*index = end_index
+	return value, nil
+}
+
+func decodeInt(bencodedString string, index *int) (interface{}, error) {
+	*index++
+
+	value := ""
+
+	for bencodedString[*index] != 'e' {
+		value += string(bencodedString[*index])
+		*index++
+	}
+
+	*index++
+
+	if value == "-0" {
+		return nil, fmt.Errorf("negative zero is not allowed")
+	}
+
+	if len(value) > 1 && value[0] == '0' {
+		return nil, fmt.Errorf("leading value cannot be zero")
+	}
+
+	return strconv.Atoi(value)
 }
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	// fmt.Println("Logs from your program will appear here!")
 
 	command := os.Args[1]
 
 	if command == "decode" {
-		// Uncomment this block to pass the first stage
-
 		bencodedValue := os.Args[2]
-
-		decoded, err := decodeBencode(bencodedValue)
+		index := 0
+		decoded, err := decodeBencode(bencodedValue, &index)
 		if err != nil {
 			fmt.Println(err)
 			return
