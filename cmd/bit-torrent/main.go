@@ -14,6 +14,8 @@ func decodeBencode(bencodedString string, index *int) (interface{}, error) {
 		return decodeInt(bencodedString, index)
 	case 'l':
 		return decodeList(bencodedString, index)
+	case 'd':
+		return decodeDictionary(bencodedString, index)
 	default:
 		return decodeString(bencodedString, index)
 	}
@@ -40,6 +42,34 @@ func decodeList(bencodedString string, index *int) (interface{}, error) {
 	*index++
 
 	return list, nil
+}
+
+func decodeDictionary(bencodedString string, index *int) (interface{}, error) {
+	*index++
+
+	dict := make(map[string]interface{})
+
+	for bencodedString[*index] != 'e' {
+		key, err := decodeString(bencodedString, index)
+		if err != nil {
+			return "", err
+		}
+
+		value, err := decodeBencode(bencodedString, index)
+		if err != nil {
+			return "", err
+		}
+
+		dict[key.(string)] = value
+	}
+
+	if bencodedString[*index] != 'e' {
+		return "", fmt.Errorf("unexpected end of dictionary")
+	}
+
+	*index++
+
+	return dict, nil
 }
 
 func decodeString(bencodedString string, index *int) (interface{}, error) {
